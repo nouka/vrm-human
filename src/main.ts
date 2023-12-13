@@ -5,12 +5,7 @@ import {
   FaceLandmarkerResult,
   FilesetResolver
 } from '@mediapipe/tasks-vision'
-import {
-  VRM,
-  VRMExpressionPresetName,
-  VRMHumanBoneName,
-  VRMLoaderPlugin
-} from '@pixiv/three-vrm'
+import { VRM, VRMExpressionPresetName, VRMLoaderPlugin } from '@pixiv/three-vrm'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/Addons.js'
@@ -138,7 +133,7 @@ async function main() {
       canvas.style.scale = '0.5'
 
       // ビデオ映像のロードが完了したらループ処理スタート
-      await tick(0)
+      await tick()
     }
   } catch (e) {
     console.error(e)
@@ -147,9 +142,8 @@ async function main() {
 
   // 最終更新時間
   let lastVideoTime = -1
-  const clock = new THREE.Clock()
   // ループ処理
-  const tick = async (pref: number) => {
+  const tick = async () => {
     if (video.currentTime !== lastVideoTime) {
       const faceLandmarkerResult = faceLandmarker.detectForVideo(
         video,
@@ -159,7 +153,7 @@ async function main() {
       lastVideoTime = video.currentTime
     }
 
-    draw(context2D, pref)
+    draw(context2D)
     // 3Dレンダラー
     renderer.render(scene, camera)
 
@@ -229,10 +223,7 @@ async function main() {
   /**
    * 描画処理
    */
-  const draw = (
-    context2D: CanvasRenderingContext2D,
-    timestamp: number
-  ): void => {
+  const draw = (context2D: CanvasRenderingContext2D): void => {
     // 画面をクリア
     context2D.clearRect(0, 0, canvas.width, canvas.height)
 
