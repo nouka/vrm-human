@@ -5,7 +5,12 @@ import {
   FaceLandmarkerResult,
   FilesetResolver
 } from '@mediapipe/tasks-vision'
-import { VRM, VRMExpressionPresetName, VRMLoaderPlugin } from '@pixiv/three-vrm'
+import {
+  VRM,
+  VRMExpressionPresetName,
+  VRMHumanBoneName,
+  VRMLoaderPlugin
+} from '@pixiv/three-vrm'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/Addons.js'
@@ -36,7 +41,7 @@ async function main() {
     0.1,
     1000
   )
-  camera.position.set(0, 1.3, -2)
+  camera.position.set(0, 1.45, -0.8)
   camera.rotation.set(0, Math.PI, 0)
 
   // レンダラーの生成
@@ -47,7 +52,7 @@ async function main() {
 
   // カメラコントーロールの設定
   const controls = new OrbitControls(camera, renderer.domElement)
-  controls.target.set(0, 0.85, 0)
+  controls.target.set(0, 1.3, 0)
   controls.screenSpacePanning = true
   controls.update()
 
@@ -106,6 +111,19 @@ async function main() {
 
       // deal with vrm features
       console.log(vrm)
+
+      // initPose
+      vrm.humanoid.setNormalizedPose({
+        [VRMHumanBoneName.LeftUpperArm]: {
+          rotation: [0, 0, 0.621, 0.874],
+          position: [0, 0, 0]
+        },
+        [VRMHumanBoneName.RightUpperArm]: {
+          rotation: [0, 0, 0.621, -0.874],
+          position: [0, 0, 0]
+        }
+      })
+      vrm.humanoid.update()
     },
 
     // called while loading is progressing
@@ -121,38 +139,39 @@ async function main() {
   )
 
   // カメラ映像をvideoにアタッチ
-  startButton.onclick = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: {
-          facingMode: 'user'
-        }
-      })
-      video.srcObject = stream
-      video.onloadedmetadata = async () => {
-        // ビデオを再生
-        video.play()
-
-        // canvasサイズ調整
-        const widthRetio = window.innerWidth <= 640 ? 2 : 4
-        canvas.width = video.videoWidth / widthRetio
-        canvas.height = (video.videoHeight / video.videoWidth) * canvas.width
-        canvas.style.position = 'absolute'
-        canvas.style.bottom = '0'
-        canvas.style.right = '0'
-
-        // ビデオ映像のロードが完了したらループ処理スタート
-        await tick()
+  //   startButton.onclick = async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        facingMode: 'user'
       }
-    } catch (e) {
-      console.error(e)
-      return
+    })
+    video.srcObject = stream
+    video.onloadedmetadata = async () => {
+      // ビデオを再生
+      video.play()
+
+      // canvasサイズ調整
+      const widthRetio = window.innerWidth <= 640 ? 2 : 4
+      canvas.width = video.videoWidth / widthRetio
+      canvas.height = (video.videoHeight / video.videoWidth) * canvas.width
+      canvas.style.position = 'absolute'
+      canvas.style.bottom = '0'
+      canvas.style.right = '0'
+
+      // ビデオ映像のロードが完了したらループ処理スタート
+      await tick()
     }
+  } catch (e) {
+    console.error(e)
+    return
   }
+  //   }
 
   // 最終更新時間
   let lastVideoTime = -1
+  const clock = new THREE.Clock()
   // ループ処理
   const tick = async () => {
     if (video.currentTime !== lastVideoTime) {
@@ -171,6 +190,12 @@ async function main() {
     window.requestAnimationFrame(tick)
   }
 
+  const getScore = (result: FaceLandmarkerResult, name: string) => {
+    return result.faceBlendshapes[0].categories.filter(
+      (category) => category.categoryName === name
+    )[0].score
+  }
+
   /**
    * アップデート処理
    */
@@ -181,36 +206,53 @@ async function main() {
     console.log(result)
 
     // 瞬き
-    const eyeBlinkLeft = result.faceBlendshapes[0].categories.filter(
-      (category) => category.categoryName === 'eyeBlinkLeft'
-    )[0].score
+    const eyeBlinkLeft = getScore(result, 'eyeBlinkLeft')
     vrm.expressionManager?.setValue(
       VRMExpressionPresetName.BlinkLeft,
       eyeBlinkLeft
     )
 
-    const eyeBlinkRight = result.faceBlendshapes[0].categories.filter(
-      (category) => category.categoryName === 'eyeBlinkRight'
-    )[0].score
+    const eyeBlinkRight = getScore(result, 'eyeBlinkRight')
     vrm.expressionManager?.setValue(
       VRMExpressionPresetName.BlinkRight,
       eyeBlinkRight
     )
 
-    // 口``
-    const jawOpen = result.faceBlendshapes[0].categories.filter(
-      (category) => category.categoryName === 'jawOpen'
-    )[0].score
-
+    // 口
+    const jawOpen = getScore(result, 'jawOpen')
     vrm.expressionManager?.setValue(VRMExpressionPresetName.Aa, jawOpen)
 
-    const mouthPucker = result.faceBlendshapes[0].categories.filter(
-      (category) => category.categoryName === 'mouthPucker'
-    )[0].score
-
+    const mouthPucker = getScore(result, 'mouthPucker')
     vrm.expressionManager?.setValue(VRMExpressionPresetName.Ou, mouthPucker)
 
+    const mouthDimpleLeft = getScore(result, 'mouthDimpleLeft')
+    const mouthDimpleRight = getScore(result, 'mouthDimpleRight')
+    vrm.expressionManager?.setValue(
+      VRMExpressionPresetName.Ih,
+      mouthDimpleLeft + mouthDimpleRight
+    )
+
     vrm.expressionManager?.update()
+
+    // 目の動き
+    const eyeLookInRight = getScore(result, 'eyeLookInRight')
+    const eyeLookOutRight = getScore(result, 'eyeLookOutRight')
+    const eyeLookUpRight = getScore(result, 'eyeLookUpRight')
+    const eyeLookDownRight = getScore(result, 'eyeLookDownRight')
+
+    const horizontal = 50
+    const eyeLeft = horizontal * eyeLookInRight
+    const eyeRight = -horizontal * eyeLookOutRight
+
+    const vartical = 50
+    const eyeTop = -vartical * eyeLookUpRight
+    const eyeBottom = vartical * eyeLookDownRight
+
+    if (vrm.lookAt) {
+      vrm.lookAt.yaw = eyeLeft + eyeRight
+      vrm.lookAt.pitch = eyeTop + eyeBottom
+      vrm.lookAt.update(clock.getDelta())
+    }
   }
 
   /**
