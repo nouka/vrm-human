@@ -139,35 +139,35 @@ async function main() {
   )
 
   // カメラ映像をvideoにアタッチ
-  //   startButton.onclick = async () => {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: {
-        facingMode: 'user'
+  startButton.onclick = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          facingMode: 'user'
+        }
+      })
+      video.srcObject = stream
+      video.onloadedmetadata = async () => {
+        // ビデオを再生
+        video.play()
+
+        // canvasサイズ調整
+        const widthRetio = window.innerWidth <= 640 ? 2 : 4
+        canvas.width = video.videoWidth / widthRetio
+        canvas.height = (video.videoHeight / video.videoWidth) * canvas.width
+        canvas.style.position = 'absolute'
+        canvas.style.bottom = '0'
+        canvas.style.right = '0'
+
+        // ビデオ映像のロードが完了したらループ処理スタート
+        await tick()
       }
-    })
-    video.srcObject = stream
-    video.onloadedmetadata = async () => {
-      // ビデオを再生
-      video.play()
-
-      // canvasサイズ調整
-      const widthRetio = window.innerWidth <= 640 ? 2 : 4
-      canvas.width = video.videoWidth / widthRetio
-      canvas.height = (video.videoHeight / video.videoWidth) * canvas.width
-      canvas.style.position = 'absolute'
-      canvas.style.bottom = '0'
-      canvas.style.right = '0'
-
-      // ビデオ映像のロードが完了したらループ処理スタート
-      await tick()
+    } catch (e) {
+      console.error(e)
+      return
     }
-  } catch (e) {
-    console.error(e)
-    return
   }
-  //   }
 
   // 最終更新時間
   let lastVideoTime = -1
