@@ -69,17 +69,24 @@ async function main() {
     return new VRMLoaderPlugin(parser)
   })
 
-  // canvasエレメントを取得
+  // canvasエレメントを作成
   const canvas = document.createElement('canvas')
   const context2D = canvas.getContext('2d')!
   // videoエレメントを作成
   const video = document.createElement('video')
+  // startボタンを作成
+  const startButton = document.createElement('button')
+  startButton.textContent = '開始'
+  startButton.style.position = 'absolute'
+  startButton.style.top = '0'
+  startButton.style.left = '0'
 
   // Domに追加
   const container = <HTMLDivElement>document.getElementById('container')
   container.style.position = 'relative'
   container.appendChild(renderer.domElement)
   container.appendChild(canvas)
+  container.appendChild(startButton)
 
   let vrm: VRM
 
@@ -112,32 +119,34 @@ async function main() {
   )
 
   // カメラ映像をvideoにアタッチ
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: {
-        facingMode: 'user'
+  startButton.onclick = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          facingMode: 'user'
+        }
+      })
+      video.srcObject = stream
+      video.onloadedmetadata = async () => {
+        // ビデオを再生
+        video.play()
+
+        // canvasサイズ調整
+        const widthRetio = window.innerWidth <= 640 ? 2 : 4
+        canvas.width = video.videoWidth / widthRetio
+        canvas.height = (video.videoHeight / video.videoWidth) * canvas.width
+        canvas.style.position = 'absolute'
+        canvas.style.bottom = '0'
+        canvas.style.right = '0'
+
+        // ビデオ映像のロードが完了したらループ処理スタート
+        await tick()
       }
-    })
-    video.srcObject = stream
-    video.onloadedmetadata = async () => {
-      // ビデオを再生
-      video.play()
-
-      // canvasサイズ調整
-      canvas.width = video.videoWidth
-      canvas.height = video.videoHeight
-      canvas.style.position = 'absolute'
-      canvas.style.bottom = '0'
-      canvas.style.right = '0'
-      canvas.style.scale = '0.5'
-
-      // ビデオ映像のロードが完了したらループ処理スタート
-      await tick()
+    } catch (e) {
+      console.error(e)
+      return
     }
-  } catch (e) {
-    console.error(e)
-    return
   }
 
   // 最終更新時間
