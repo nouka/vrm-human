@@ -83,6 +83,8 @@ async function main() {
 
   // Domに追加
   const container = <HTMLDivElement>document.getElementById('container')
+  container.style.width = `${window.innerWidth}px`
+  container.style.height = `${window.innerHeight}px`
   container.style.position = 'relative'
   container.appendChild(renderer.domElement)
   container.appendChild(canvas)
