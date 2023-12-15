@@ -3,7 +3,9 @@ import './style.css'
 import {
   FaceLandmarker,
   FaceLandmarkerResult,
-  FilesetResolver
+  FilesetResolver,
+  PoseLandmarker,
+  PoseLandmarkerResult
 } from '@mediapipe/tasks-vision'
 import {
   VRM,
@@ -29,6 +31,14 @@ async function main() {
     outputFaceBlendshapes: true,
     runningMode: 'VIDEO',
     numFaces: 1
+  })
+  const poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath: `https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task`,
+      delegate: 'GPU'
+    },
+    runningMode: 'VIDEO',
+    numPoses: 1
   })
 
   // シーン
@@ -110,7 +120,7 @@ async function main() {
       scene.add(vrm.scene)
 
       // deal with vrm features
-      console.log(vrm)
+      console.debug(vrm)
 
       // initPose
       vrm.humanoid.setNormalizedPose({
@@ -128,7 +138,7 @@ async function main() {
 
     // called while loading is progressing
     (progress) =>
-      console.log(
+      console.info(
         'Loading model...',
         100.0 * (progress.loaded / progress.total),
         '%'
@@ -161,7 +171,7 @@ async function main() {
         canvas.style.right = '0'
 
         // ビデオ映像のロードが完了したらループ処理スタート
-        await tick()
+        await tick(0)
       }
     } catch (e) {
       console.error(e)
@@ -173,13 +183,11 @@ async function main() {
   let lastVideoTime = -1
   const clock = new THREE.Clock()
   // ループ処理
-  const tick = async () => {
+  const tick = async (pref: number) => {
     if (video.currentTime !== lastVideoTime) {
-      const faceLandmarkerResult = faceLandmarker.detectForVideo(
-        video,
-        Date.now()
-      )
-      update(faceLandmarkerResult, vrm)
+      const faceLandmarkerResult = faceLandmarker.detectForVideo(video, pref)
+      const poseLandmarkerResult = poseLandmarker.detectForVideo(video, pref)
+      update(faceLandmarkerResult, poseLandmarkerResult, vrm)
       lastVideoTime = video.currentTime
     }
 
@@ -200,53 +208,61 @@ async function main() {
    * アップデート処理
    */
   const update = async (
-    result: FaceLandmarkerResult,
+    face: FaceLandmarkerResult,
+    _pose: PoseLandmarkerResult,
     vrm: VRM
   ): Promise<void> => {
-    console.log(result)
-
+    console.log(face)
     // 瞬き
-    const eyeBlinkLeft = getScore(result, 'eyeBlinkLeft')
-    vrm.expressionManager?.setValue(
-      VRMExpressionPresetName.BlinkLeft,
-      eyeBlinkLeft
-    )
-
-    const eyeBlinkRight = getScore(result, 'eyeBlinkRight')
+    const eyeBlinkLeft = getScore(face, 'eyeBlinkLeft')
     vrm.expressionManager?.setValue(
       VRMExpressionPresetName.BlinkRight,
-      eyeBlinkRight
+      (eyeBlinkLeft - 0.2) * 1.875
+    )
+
+    const eyeBlinkRight = getScore(face, 'eyeBlinkRight')
+    vrm.expressionManager?.setValue(
+      VRMExpressionPresetName.BlinkLeft,
+      (eyeBlinkRight - 0.2) * 1.875
     )
 
     // 口
-    const jawOpen = getScore(result, 'jawOpen')
-    vrm.expressionManager?.setValue(VRMExpressionPresetName.Aa, jawOpen)
+    const jawOpen = getScore(face, 'jawOpen')
+    const mouthClose = getScore(face, 'mouthClose')
+    vrm.expressionManager?.setValue(
+      VRMExpressionPresetName.Aa,
+      jawOpen - mouthClose
+    )
 
-    const mouthPucker = getScore(result, 'mouthPucker')
+    const mouthPucker = getScore(face, 'mouthPucker')
     vrm.expressionManager?.setValue(VRMExpressionPresetName.Ou, mouthPucker)
 
-    const mouthDimpleLeft = getScore(result, 'mouthDimpleLeft')
-    const mouthDimpleRight = getScore(result, 'mouthDimpleRight')
+    const mouthSmileLeft = getScore(face, 'mouthSmileLeft')
+    const mouthSmileRight = getScore(face, 'mouthSmileRight')
     vrm.expressionManager?.setValue(
       VRMExpressionPresetName.Ih,
-      mouthDimpleLeft + mouthDimpleRight
+      (mouthSmileLeft + mouthSmileRight) / 2
     )
 
     vrm.expressionManager?.update()
 
     // 目の動き
-    const eyeLookInRight = getScore(result, 'eyeLookInRight')
-    const eyeLookOutRight = getScore(result, 'eyeLookOutRight')
-    const eyeLookUpRight = getScore(result, 'eyeLookUpRight')
-    const eyeLookDownRight = getScore(result, 'eyeLookDownRight')
+    const eyeLookInRight = getScore(face, 'eyeLookInRight')
+    const eyeLookInLeft = getScore(face, 'eyeLookInLeft')
+    const eyeLookOutRight = getScore(face, 'eyeLookOutRight')
+    const eyeLookOutLeft = getScore(face, 'eyeLookOutLeft')
+    const eyeLookUpRight = getScore(face, 'eyeLookUpRight')
+    const eyeLookUpLeft = getScore(face, 'eyeLookUpLeft')
+    const eyeLookDownRight = getScore(face, 'eyeLookDownRight')
+    const eyeLookDownLeft = getScore(face, 'eyeLookDownLeft')
 
     const horizontal = 50
-    const eyeLeft = horizontal * eyeLookInRight
-    const eyeRight = -horizontal * eyeLookOutRight
+    const eyeLeft = -horizontal * ((eyeLookInRight + eyeLookOutLeft) / 2)
+    const eyeRight = horizontal * ((eyeLookOutRight + eyeLookInLeft) / 2)
 
     const vartical = 50
-    const eyeTop = -vartical * eyeLookUpRight
-    const eyeBottom = vartical * eyeLookDownRight
+    const eyeTop = -vartical * ((eyeLookUpRight + eyeLookUpLeft) / 2)
+    const eyeBottom = vartical * ((eyeLookDownRight + eyeLookDownLeft) / 2)
 
     if (vrm.lookAt) {
       vrm.lookAt.yaw = eyeLeft + eyeRight
