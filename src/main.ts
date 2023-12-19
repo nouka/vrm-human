@@ -16,7 +16,7 @@ import {
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/Addons.js'
-import { Face } from 'kalidokit'
+import { Face, Pose } from 'kalidokit'
 
 async function main() {
   // モデルをロード
@@ -92,10 +92,10 @@ async function main() {
   const video = document.createElement('video')
   // startボタンを作成
   const startButton = document.createElement('button')
-  startButton.textContent = '開始'
+  startButton.textContent = 'カメラ読み込み開始'
   startButton.style.position = 'absolute'
-  startButton.style.top = '0'
-  startButton.style.left = '0'
+  startButton.style.top = '10px'
+  startButton.style.left = '10px'
 
   // Domに追加
   const container = <HTMLDivElement>document.getElementById('container')
@@ -164,6 +164,7 @@ async function main() {
       video.onloadedmetadata = async () => {
         // ビデオを再生
         video.play()
+        startButton.style.display = 'none'
 
         // canvasサイズ調整
         const widthRetio = window.innerWidth <= 640 ? 2 : 4
@@ -215,9 +216,6 @@ async function main() {
     pose: PoseLandmarkerResult,
     vrm: VRM
   ): Promise<void> => {
-    console.log(pose)
-    console.log(face)
-
     const faceRig = Face.solve(face.faceLandmarks[0], {
       runtime: 'mediapipe',
       video: video,
@@ -226,18 +224,18 @@ async function main() {
         height: window.innerHeight
       }
     })
-    console.log(faceRig)
     if (!faceRig) return
 
-    // const poseRig = Pose.solve(pose.landmarks[0], {
-    //   runtime: 'mediapipe',
-    //   video: video,
-    //   imageSize: {
-    //     width: window.innerWidth,
-    //     height: window.innerHeight
-    //   }
-    // })
-    // console.log(poseRig)
+    const poseRig = Pose.solve(pose.worldLandmarks[0], pose.landmarks[0], {
+      runtime: 'mediapipe',
+      video: video,
+      imageSize: {
+        width: window.innerWidth,
+        height: window.innerHeight
+      },
+      enableLegs: false
+    })
+    if (!poseRig) return
 
     // 瞬き
     vrm.expressionManager?.setValue(
@@ -298,14 +296,43 @@ async function main() {
     }
 
     // 首
-    const headQuaternion = new THREE.Quaternion().setFromAxisAngle(
-      new THREE.Vector3(
+    const headQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
         faceRig.head.normalized.x,
         faceRig.head.normalized.y,
         faceRig.head.normalized.z
-      ),
-      Math.PI / 2
+      )
     )
+    // 手
+    const leftUpperArmQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        poseRig.LeftUpperArm.x,
+        poseRig.LeftUpperArm.y,
+        poseRig.LeftUpperArm.z
+      )
+    )
+    const leftLowerArmQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        poseRig.LeftLowerArm.x,
+        poseRig.LeftLowerArm.y,
+        poseRig.LeftLowerArm.z
+      )
+    )
+    const rightUpperArmQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        poseRig.RightUpperArm.x,
+        poseRig.RightUpperArm.y,
+        poseRig.RightUpperArm.z
+      )
+    )
+    const rightLowerArmQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        poseRig.RightLowerArm.x,
+        poseRig.RightLowerArm.y,
+        poseRig.RightLowerArm.z
+      )
+    )
+
     vrm.humanoid.setNormalizedPose({
       [VRMHumanBoneName.Head]: {
         rotation: [
@@ -314,8 +341,41 @@ async function main() {
           headQuaternion.z,
           headQuaternion.w
         ]
+      },
+      [VRMHumanBoneName.LeftUpperArm]: {
+        rotation: [
+          leftUpperArmQuaternion.x,
+          leftUpperArmQuaternion.y,
+          leftUpperArmQuaternion.z,
+          leftUpperArmQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.LeftLowerArm]: {
+        rotation: [
+          leftLowerArmQuaternion.x,
+          leftLowerArmQuaternion.y,
+          leftLowerArmQuaternion.z,
+          leftLowerArmQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.RightUpperArm]: {
+        rotation: [
+          rightUpperArmQuaternion.x,
+          rightUpperArmQuaternion.y,
+          rightUpperArmQuaternion.z,
+          rightUpperArmQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.RightLowerArm]: {
+        rotation: [
+          rightLowerArmQuaternion.x,
+          rightLowerArmQuaternion.y,
+          rightLowerArmQuaternion.z,
+          rightLowerArmQuaternion.w
+        ]
       }
     })
+
     vrm.humanoid.update()
   }
 
