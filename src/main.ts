@@ -16,6 +16,7 @@ import {
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/Addons.js'
+import { Face } from 'kalidokit'
 
 async function main() {
   // モデルをロード
@@ -123,14 +124,16 @@ async function main() {
       console.debug(vrm)
 
       // initPose
+      const q = new THREE.Quaternion().setFromAxisAngle(
+        new THREE.Vector3(0, 0, 1),
+        Math.PI / 2.3
+      )
       vrm.humanoid.setNormalizedPose({
         [VRMHumanBoneName.LeftUpperArm]: {
-          rotation: [0, 0, 0.621, 0.874],
-          position: [0, 0, 0]
+          rotation: [q.x, q.y, q.z, q.w]
         },
         [VRMHumanBoneName.RightUpperArm]: {
-          rotation: [0, 0, 0.621, -0.874],
-          position: [0, 0, 0]
+          rotation: [q.x, q.y, q.z, -q.w]
         }
       })
       vrm.humanoid.update()
@@ -209,39 +212,63 @@ async function main() {
    */
   const update = async (
     face: FaceLandmarkerResult,
-    _pose: PoseLandmarkerResult,
+    pose: PoseLandmarkerResult,
     vrm: VRM
   ): Promise<void> => {
+    console.log(pose)
     console.log(face)
+
+    const faceRig = Face.solve(face.faceLandmarks[0], {
+      runtime: 'mediapipe',
+      video: video,
+      imageSize: {
+        width: window.innerWidth,
+        height: window.innerHeight
+      }
+    })
+    console.log(faceRig)
+    if (!faceRig) return
+
+    // const poseRig = Pose.solve(pose.landmarks[0], {
+    //   runtime: 'mediapipe',
+    //   video: video,
+    //   imageSize: {
+    //     width: window.innerWidth,
+    //     height: window.innerHeight
+    //   }
+    // })
+    // console.log(poseRig)
+
     // 瞬き
-    const eyeBlinkLeft = getScore(face, 'eyeBlinkLeft')
     vrm.expressionManager?.setValue(
       VRMExpressionPresetName.BlinkRight,
-      (eyeBlinkLeft - 0.2) * 1.875
+      1 - faceRig.eye.r
     )
-
-    const eyeBlinkRight = getScore(face, 'eyeBlinkRight')
     vrm.expressionManager?.setValue(
       VRMExpressionPresetName.BlinkLeft,
-      (eyeBlinkRight - 0.2) * 1.875
+      1 - faceRig.eye.l
     )
 
     // 口
-    const jawOpen = getScore(face, 'jawOpen')
-    const mouthClose = getScore(face, 'mouthClose')
     vrm.expressionManager?.setValue(
       VRMExpressionPresetName.Aa,
-      jawOpen - mouthClose
+      faceRig.mouth.shape.A
     )
-
-    const mouthPucker = getScore(face, 'mouthPucker')
-    vrm.expressionManager?.setValue(VRMExpressionPresetName.Ou, mouthPucker)
-
-    const mouthSmileLeft = getScore(face, 'mouthSmileLeft')
-    const mouthSmileRight = getScore(face, 'mouthSmileRight')
     vrm.expressionManager?.setValue(
       VRMExpressionPresetName.Ih,
-      (mouthSmileLeft + mouthSmileRight) / 2
+      faceRig.mouth.shape.I
+    )
+    vrm.expressionManager?.setValue(
+      VRMExpressionPresetName.Ou,
+      faceRig.mouth.shape.U
+    )
+    vrm.expressionManager?.setValue(
+      VRMExpressionPresetName.Ee,
+      faceRig.mouth.shape.E
+    )
+    vrm.expressionManager?.setValue(
+      VRMExpressionPresetName.Ou,
+      faceRig.mouth.shape.O
     )
 
     vrm.expressionManager?.update()
@@ -269,6 +296,27 @@ async function main() {
       vrm.lookAt.pitch = eyeTop + eyeBottom
       vrm.lookAt.update(clock.getDelta())
     }
+
+    // 首
+    const headQuaternion = new THREE.Quaternion().setFromAxisAngle(
+      new THREE.Vector3(
+        faceRig.head.normalized.x,
+        faceRig.head.normalized.y,
+        faceRig.head.normalized.z
+      ),
+      Math.PI / 2
+    )
+    vrm.humanoid.setNormalizedPose({
+      [VRMHumanBoneName.Head]: {
+        rotation: [
+          headQuaternion.x,
+          headQuaternion.y,
+          headQuaternion.z,
+          headQuaternion.w
+        ]
+      }
+    })
+    vrm.humanoid.update()
   }
 
   /**
