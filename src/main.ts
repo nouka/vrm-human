@@ -4,6 +4,8 @@ import {
   FaceLandmarker,
   FaceLandmarkerResult,
   FilesetResolver,
+  HandLandmarker,
+  HandLandmarkerResult,
   PoseLandmarker,
   PoseLandmarkerResult
 } from '@mediapipe/tasks-vision'
@@ -16,7 +18,7 @@ import {
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/Addons.js'
-import { Face, Pose } from 'kalidokit'
+import { Face, Hand, Pose, Side } from 'kalidokit'
 
 async function main() {
   // モデルをロード
@@ -40,6 +42,14 @@ async function main() {
     },
     runningMode: 'VIDEO',
     numPoses: 1
+  })
+  const handLandmarker = await HandLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
+      delegate: 'GPU'
+    },
+    runningMode: 'VIDEO',
+    numHands: 2
   })
 
   // シーン
@@ -191,7 +201,13 @@ async function main() {
     if (video.currentTime !== lastVideoTime) {
       const faceLandmarkerResult = faceLandmarker.detectForVideo(video, pref)
       const poseLandmarkerResult = poseLandmarker.detectForVideo(video, pref)
-      update(faceLandmarkerResult, poseLandmarkerResult, vrm)
+      const handLandmarkerResult = handLandmarker.detectForVideo(video, pref)
+      update(
+        faceLandmarkerResult,
+        poseLandmarkerResult,
+        handLandmarkerResult,
+        vrm
+      )
       lastVideoTime = video.currentTime
     }
 
@@ -214,28 +230,32 @@ async function main() {
   const update = async (
     face: FaceLandmarkerResult,
     pose: PoseLandmarkerResult,
+    hand: HandLandmarkerResult,
     vrm: VRM
   ): Promise<void> => {
     const faceRig = Face.solve(face.faceLandmarks[0], {
       runtime: 'mediapipe',
       video: video,
-      imageSize: {
-        width: window.innerWidth,
-        height: window.innerHeight
-      }
+      imageSize: { height: 0, width: 0 },
+      smoothBlink: false,
+      blinkSettings: [0.25, 0.75]
     })
     if (!faceRig) return
 
     const poseRig = Pose.solve(pose.worldLandmarks[0], pose.landmarks[0], {
       runtime: 'mediapipe',
       video: video,
-      imageSize: {
-        width: window.innerWidth,
-        height: window.innerHeight
-      },
+      imageSize: { height: 0, width: 0 },
       enableLegs: false
     })
+    console.log(pose, poseRig)
     if (!poseRig) return
+
+    const handRigs = hand.handedness.map((cat, index) => {
+      return Hand.solve(hand.landmarks[index], cat[0].categoryName as Side)
+    })
+    const rightHandRig = handRigs.find((rig) => rig?.RightWrist !== undefined)
+    const leftHandRig = handRigs.find((rig) => rig?.LeftWrist !== undefined)
 
     // 瞬き
     vrm.expressionManager?.setValue(
@@ -303,7 +323,8 @@ async function main() {
         faceRig.head.normalized.z
       )
     )
-    // 手
+
+    // 腕
     const leftUpperArmQuaternion = new THREE.Quaternion().setFromEuler(
       new THREE.Euler(
         poseRig.LeftUpperArm.x,
@@ -333,6 +354,237 @@ async function main() {
       )
     )
 
+    // 手
+    const rightWristQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        rightHandRig?.RightWrist.x,
+        rightHandRig?.RightWrist.y,
+        rightHandRig?.RightWrist.z
+      )
+    )
+    const rightLittleDistalQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        rightHandRig?.RightLittleDistal.x,
+        rightHandRig?.RightLittleDistal.y,
+        rightHandRig?.RightLittleDistal.z
+      )
+    )
+    const rightLittleIntermediateQuaternion =
+      new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(
+          rightHandRig?.RightLittleIntermediate.x,
+          rightHandRig?.RightLittleIntermediate.y,
+          rightHandRig?.RightLittleIntermediate.z
+        )
+      )
+    const rightLittleProximalQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        rightHandRig?.RightLittleProximal.x,
+        rightHandRig?.RightLittleProximal.y,
+        rightHandRig?.RightLittleProximal.z
+      )
+    )
+    const rightRingDistalQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        rightHandRig?.RightRingDistal.x,
+        rightHandRig?.RightRingDistal.y,
+        rightHandRig?.RightRingDistal.z
+      )
+    )
+    const rightRingIntermediateQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        rightHandRig?.RightRingIntermediate.x,
+        rightHandRig?.RightRingIntermediate.y,
+        rightHandRig?.RightRingIntermediate.z
+      )
+    )
+    const rightRingProximalQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        rightHandRig?.RightRingProximal.x,
+        rightHandRig?.RightRingProximal.y,
+        rightHandRig?.RightRingProximal.z
+      )
+    )
+    const rightMiddleDistalQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        rightHandRig?.RightMiddleDistal.x,
+        rightHandRig?.RightMiddleDistal.y,
+        rightHandRig?.RightMiddleDistal.z
+      )
+    )
+    const rightMiddleIntermediateQuaternion =
+      new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(
+          rightHandRig?.RightMiddleIntermediate.x,
+          rightHandRig?.RightMiddleIntermediate.y,
+          rightHandRig?.RightMiddleIntermediate.z
+        )
+      )
+    const rightMiddleProximalQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        rightHandRig?.RightMiddleProximal.x,
+        rightHandRig?.RightMiddleProximal.y,
+        rightHandRig?.RightMiddleProximal.z
+      )
+    )
+    const rightIndexDistalQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        rightHandRig?.RightIndexDistal.x,
+        rightHandRig?.RightIndexDistal.y,
+        rightHandRig?.RightIndexDistal.z
+      )
+    )
+    const rightIndexIntermediateQuaternion =
+      new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(
+          rightHandRig?.RightIndexIntermediate.x,
+          rightHandRig?.RightIndexIntermediate.y,
+          rightHandRig?.RightIndexIntermediate.z
+        )
+      )
+    const rightIndexProximalQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        rightHandRig?.RightIndexProximal.x,
+        rightHandRig?.RightIndexProximal.y,
+        rightHandRig?.RightIndexProximal.z
+      )
+    )
+    const rightThumbDistalQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        rightHandRig?.RightThumbDistal.x,
+        rightHandRig?.RightThumbDistal.y,
+        rightHandRig?.RightThumbDistal.z
+      )
+    )
+    const rightThumbIntermediateQuaternion =
+      new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(
+          rightHandRig?.RightThumbIntermediate.x,
+          rightHandRig?.RightThumbIntermediate.y,
+          rightHandRig?.RightThumbIntermediate.z
+        )
+      )
+    const rightThumbProximalQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        rightHandRig?.RightThumbProximal.x,
+        rightHandRig?.RightThumbProximal.y,
+        rightHandRig?.RightThumbProximal.z
+      )
+    )
+    const leftWristQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        leftHandRig?.LeftWrist.x,
+        leftHandRig?.LeftWrist.y,
+        leftHandRig?.LeftWrist.z
+      )
+    )
+    const leftLittleDistalQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        leftHandRig?.LeftLittleDistal.x,
+        leftHandRig?.LeftLittleDistal.y,
+        leftHandRig?.LeftLittleDistal.z
+      )
+    )
+    const leftLittleIntermediateQuaternion =
+      new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(
+          leftHandRig?.LeftLittleIntermediate.x,
+          leftHandRig?.LeftLittleIntermediate.y,
+          leftHandRig?.LeftLittleIntermediate.z
+        )
+      )
+    const leftLittleProximalQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        leftHandRig?.LeftLittleProximal.x,
+        leftHandRig?.LeftLittleProximal.y,
+        leftHandRig?.LeftLittleProximal.z
+      )
+    )
+    const leftRingDistalQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        leftHandRig?.LeftRingDistal.x,
+        leftHandRig?.LeftRingDistal.y,
+        leftHandRig?.LeftRingDistal.z
+      )
+    )
+    const leftRingIntermediateQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        leftHandRig?.LeftRingIntermediate.x,
+        leftHandRig?.LeftRingIntermediate.y,
+        leftHandRig?.LeftRingIntermediate.z
+      )
+    )
+    const leftRingProximalQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        leftHandRig?.LeftRingProximal.x,
+        leftHandRig?.LeftRingProximal.y,
+        leftHandRig?.LeftRingProximal.z
+      )
+    )
+    const leftMiddleDistalQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        leftHandRig?.LeftMiddleDistal.x,
+        leftHandRig?.LeftMiddleDistal.y,
+        leftHandRig?.LeftMiddleDistal.z
+      )
+    )
+    const leftMiddleIntermediateQuaternion =
+      new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(
+          leftHandRig?.LeftMiddleIntermediate.x,
+          leftHandRig?.LeftMiddleIntermediate.y,
+          leftHandRig?.LeftMiddleIntermediate.z
+        )
+      )
+    const leftMiddleProximalQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        leftHandRig?.LeftMiddleProximal.x,
+        leftHandRig?.LeftMiddleProximal.y,
+        leftHandRig?.LeftMiddleProximal.z
+      )
+    )
+    const leftIndexDistalQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        leftHandRig?.LeftIndexDistal.x,
+        leftHandRig?.LeftIndexDistal.y,
+        leftHandRig?.LeftIndexDistal.z
+      )
+    )
+    const leftIndexIntermediateQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        leftHandRig?.LeftIndexIntermediate.x,
+        leftHandRig?.LeftIndexIntermediate.y,
+        leftHandRig?.LeftIndexIntermediate.z
+      )
+    )
+    const leftIndexProximalQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        leftHandRig?.LeftIndexProximal.x,
+        leftHandRig?.LeftIndexProximal.y,
+        leftHandRig?.LeftIndexProximal.z
+      )
+    )
+    const leftThumbDistalQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        leftHandRig?.LeftThumbDistal.x,
+        leftHandRig?.LeftThumbDistal.y,
+        leftHandRig?.LeftThumbDistal.z
+      )
+    )
+    const leftThumbIntermediateQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        leftHandRig?.LeftThumbIntermediate.x,
+        leftHandRig?.LeftThumbIntermediate.y,
+        leftHandRig?.LeftThumbIntermediate.z
+      )
+    )
+    const leftThumbProximalQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        leftHandRig?.LeftThumbProximal.x,
+        leftHandRig?.LeftThumbProximal.y,
+        leftHandRig?.LeftThumbProximal.z
+      )
+    )
     vrm.humanoid.setNormalizedPose({
       [VRMHumanBoneName.Head]: {
         rotation: [
@@ -372,6 +624,262 @@ async function main() {
           rightLowerArmQuaternion.y,
           rightLowerArmQuaternion.z,
           rightLowerArmQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.RightHand]: {
+        rotation: [
+          rightWristQuaternion.x,
+          rightWristQuaternion.y,
+          rightWristQuaternion.z,
+          rightWristQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.RightLittleDistal]: {
+        rotation: [
+          rightLittleDistalQuaternion.x,
+          rightLittleDistalQuaternion.y,
+          rightLittleDistalQuaternion.z,
+          rightLittleDistalQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.RightLittleIntermediate]: {
+        rotation: [
+          rightLittleIntermediateQuaternion.x,
+          rightLittleIntermediateQuaternion.y,
+          rightLittleIntermediateQuaternion.z,
+          rightLittleIntermediateQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.RightLittleProximal]: {
+        rotation: [
+          rightLittleProximalQuaternion.x,
+          rightLittleProximalQuaternion.y,
+          rightLittleProximalQuaternion.z,
+          rightLittleProximalQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.RightRingDistal]: {
+        rotation: [
+          rightRingDistalQuaternion.x,
+          rightRingDistalQuaternion.y,
+          rightRingDistalQuaternion.z,
+          rightRingDistalQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.RightRingIntermediate]: {
+        rotation: [
+          rightRingIntermediateQuaternion.x,
+          rightRingIntermediateQuaternion.y,
+          rightRingIntermediateQuaternion.z,
+          rightRingIntermediateQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.RightRingProximal]: {
+        rotation: [
+          rightRingProximalQuaternion.x,
+          rightRingProximalQuaternion.y,
+          rightRingProximalQuaternion.z,
+          rightRingProximalQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.RightMiddleDistal]: {
+        rotation: [
+          rightMiddleDistalQuaternion.x,
+          rightMiddleDistalQuaternion.y,
+          rightMiddleDistalQuaternion.z,
+          rightMiddleDistalQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.RightMiddleIntermediate]: {
+        rotation: [
+          rightMiddleIntermediateQuaternion.x,
+          rightMiddleIntermediateQuaternion.y,
+          rightMiddleIntermediateQuaternion.z,
+          rightMiddleIntermediateQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.RightMiddleProximal]: {
+        rotation: [
+          rightMiddleProximalQuaternion.x,
+          rightMiddleProximalQuaternion.y,
+          rightMiddleProximalQuaternion.z,
+          rightMiddleProximalQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.RightIndexDistal]: {
+        rotation: [
+          rightIndexDistalQuaternion.x,
+          rightIndexDistalQuaternion.y,
+          rightIndexDistalQuaternion.z,
+          rightIndexDistalQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.RightIndexIntermediate]: {
+        rotation: [
+          rightIndexIntermediateQuaternion.x,
+          rightIndexIntermediateQuaternion.y,
+          rightIndexIntermediateQuaternion.z,
+          rightIndexIntermediateQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.RightIndexProximal]: {
+        rotation: [
+          rightIndexProximalQuaternion.x,
+          rightIndexProximalQuaternion.y,
+          rightIndexProximalQuaternion.z,
+          rightIndexProximalQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.RightThumbDistal]: {
+        rotation: [
+          rightThumbDistalQuaternion.x,
+          rightThumbDistalQuaternion.y,
+          rightThumbDistalQuaternion.z,
+          rightThumbDistalQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.RightThumbMetacarpal]: {
+        rotation: [
+          rightThumbIntermediateQuaternion.x,
+          rightThumbIntermediateQuaternion.y,
+          rightThumbIntermediateQuaternion.z,
+          rightThumbIntermediateQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.RightThumbProximal]: {
+        rotation: [
+          rightThumbProximalQuaternion.x,
+          rightThumbProximalQuaternion.y,
+          rightThumbProximalQuaternion.z,
+          rightThumbProximalQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.LeftHand]: {
+        rotation: [
+          leftWristQuaternion.x,
+          leftWristQuaternion.y,
+          leftWristQuaternion.z,
+          leftWristQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.LeftLittleDistal]: {
+        rotation: [
+          leftLittleDistalQuaternion.x,
+          leftLittleDistalQuaternion.y,
+          leftLittleDistalQuaternion.z,
+          leftLittleDistalQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.LeftLittleIntermediate]: {
+        rotation: [
+          leftLittleIntermediateQuaternion.x,
+          leftLittleIntermediateQuaternion.y,
+          leftLittleIntermediateQuaternion.z,
+          leftLittleIntermediateQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.LeftLittleProximal]: {
+        rotation: [
+          leftLittleProximalQuaternion.x,
+          leftLittleProximalQuaternion.y,
+          leftLittleProximalQuaternion.z,
+          leftLittleProximalQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.LeftRingDistal]: {
+        rotation: [
+          leftRingDistalQuaternion.x,
+          leftRingDistalQuaternion.y,
+          leftRingDistalQuaternion.z,
+          leftRingDistalQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.LeftRingIntermediate]: {
+        rotation: [
+          leftRingIntermediateQuaternion.x,
+          leftRingIntermediateQuaternion.y,
+          leftRingIntermediateQuaternion.z,
+          leftRingIntermediateQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.LeftRingProximal]: {
+        rotation: [
+          leftRingProximalQuaternion.x,
+          leftRingProximalQuaternion.y,
+          leftRingProximalQuaternion.z,
+          leftRingProximalQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.LeftMiddleDistal]: {
+        rotation: [
+          leftMiddleDistalQuaternion.x,
+          leftMiddleDistalQuaternion.y,
+          leftMiddleDistalQuaternion.z,
+          leftMiddleDistalQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.LeftMiddleIntermediate]: {
+        rotation: [
+          leftMiddleIntermediateQuaternion.x,
+          leftMiddleIntermediateQuaternion.y,
+          leftMiddleIntermediateQuaternion.z,
+          leftMiddleIntermediateQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.LeftMiddleProximal]: {
+        rotation: [
+          leftMiddleProximalQuaternion.x,
+          leftMiddleProximalQuaternion.y,
+          leftMiddleProximalQuaternion.z,
+          leftMiddleProximalQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.LeftIndexDistal]: {
+        rotation: [
+          leftIndexDistalQuaternion.x,
+          leftIndexDistalQuaternion.y,
+          leftIndexDistalQuaternion.z,
+          leftIndexDistalQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.LeftIndexIntermediate]: {
+        rotation: [
+          leftIndexIntermediateQuaternion.x,
+          leftIndexIntermediateQuaternion.y,
+          leftIndexIntermediateQuaternion.z,
+          leftIndexIntermediateQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.LeftIndexProximal]: {
+        rotation: [
+          leftIndexProximalQuaternion.x,
+          leftIndexProximalQuaternion.y,
+          leftIndexProximalQuaternion.z,
+          leftIndexProximalQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.LeftThumbDistal]: {
+        rotation: [
+          leftThumbDistalQuaternion.x,
+          leftThumbDistalQuaternion.y,
+          leftThumbDistalQuaternion.z,
+          leftThumbDistalQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.LeftThumbMetacarpal]: {
+        rotation: [
+          leftThumbIntermediateQuaternion.x,
+          leftThumbIntermediateQuaternion.y,
+          leftThumbIntermediateQuaternion.z,
+          leftThumbIntermediateQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.LeftThumbProximal]: {
+        rotation: [
+          leftThumbProximalQuaternion.x,
+          leftThumbProximalQuaternion.y,
+          leftThumbProximalQuaternion.z,
+          leftThumbProximalQuaternion.w
         ]
       }
     })
