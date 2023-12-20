@@ -15,10 +15,10 @@ import {
   VRMHumanBoneName,
   VRMLoaderPlugin
 } from '@pixiv/three-vrm'
+import { Face, Hand, Pose, Side } from 'kalidokit'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/Addons.js'
-import { Face, Hand, Pose, Side } from 'kalidokit'
 
 async function main() {
   // モデルをロード
@@ -132,21 +132,6 @@ async function main() {
 
       // deal with vrm features
       console.debug(vrm)
-
-      // initPose
-      const q = new THREE.Quaternion().setFromAxisAngle(
-        new THREE.Vector3(0, 0, 1),
-        Math.PI / 2.3
-      )
-      vrm.humanoid.setNormalizedPose({
-        [VRMHumanBoneName.LeftUpperArm]: {
-          rotation: [q.x, q.y, q.z, q.w]
-        },
-        [VRMHumanBoneName.RightUpperArm]: {
-          rotation: [q.x, q.y, q.z, -q.w]
-        }
-      })
-      vrm.humanoid.update()
     },
 
     // called while loading is progressing
@@ -236,19 +221,23 @@ async function main() {
     const faceRig = Face.solve(face.faceLandmarks[0], {
       runtime: 'mediapipe',
       video: video,
-      imageSize: { height: 0, width: 0 },
-      smoothBlink: false,
+      smoothBlink: true,
       blinkSettings: [0.25, 0.75]
     })
     if (!faceRig) return
 
-    const poseRig = Pose.solve(pose.worldLandmarks[0], pose.landmarks[0], {
-      runtime: 'mediapipe',
-      video: video,
-      imageSize: { height: 0, width: 0 },
-      enableLegs: false
-    })
-    console.log(pose, poseRig)
+    const poseRig = Pose.solve(
+      pose.worldLandmarks[0].map((landmark) => ({
+        ...landmark,
+        visibility: 1
+      })),
+      pose.landmarks[0],
+      {
+        runtime: 'mediapipe',
+        video: video,
+        enableLegs: true
+      }
+    )
     if (!poseRig) return
 
     const handRigs = hand.handedness.map((cat, index) => {
@@ -324,42 +313,51 @@ async function main() {
       )
     )
 
+    // 背骨
+    const spineQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(poseRig.Spine.x, poseRig.Spine.y, poseRig.Spine.z)
+    )
+
     // 腕
     const leftUpperArmQuaternion = new THREE.Quaternion().setFromEuler(
       new THREE.Euler(
         poseRig.LeftUpperArm.x,
         poseRig.LeftUpperArm.y,
-        poseRig.LeftUpperArm.z
+        poseRig.LeftUpperArm.z,
+        poseRig.LeftUpperArm.rotationOrder
       )
     )
     const leftLowerArmQuaternion = new THREE.Quaternion().setFromEuler(
       new THREE.Euler(
         poseRig.LeftLowerArm.x,
         poseRig.LeftLowerArm.y,
-        poseRig.LeftLowerArm.z
+        poseRig.LeftLowerArm.z,
+        poseRig.LeftLowerArm.rotationOrder
       )
     )
     const rightUpperArmQuaternion = new THREE.Quaternion().setFromEuler(
       new THREE.Euler(
         poseRig.RightUpperArm.x,
         poseRig.RightUpperArm.y,
-        poseRig.RightUpperArm.z
+        poseRig.RightUpperArm.z,
+        poseRig.RightUpperArm.rotationOrder
       )
     )
     const rightLowerArmQuaternion = new THREE.Quaternion().setFromEuler(
       new THREE.Euler(
         poseRig.RightLowerArm.x,
         poseRig.RightLowerArm.y,
-        poseRig.RightLowerArm.z
+        poseRig.RightLowerArm.z,
+        poseRig.RightLowerArm.rotationOrder
       )
     )
 
     // 手
     const rightWristQuaternion = new THREE.Quaternion().setFromEuler(
       new THREE.Euler(
-        rightHandRig?.RightWrist.x,
-        rightHandRig?.RightWrist.y,
-        rightHandRig?.RightWrist.z
+        poseRig.RightHand.x,
+        poseRig.RightHand.y,
+        poseRig.RightHand.z
       )
     )
     const rightLittleDistalQuaternion = new THREE.Quaternion().setFromEuler(
@@ -473,9 +471,9 @@ async function main() {
     )
     const leftWristQuaternion = new THREE.Quaternion().setFromEuler(
       new THREE.Euler(
-        leftHandRig?.LeftWrist.x,
-        leftHandRig?.LeftWrist.y,
-        leftHandRig?.LeftWrist.z
+        poseRig.LeftHand.x,
+        poseRig.LeftHand.y,
+        poseRig.LeftHand.z
       )
     )
     const leftLittleDistalQuaternion = new THREE.Quaternion().setFromEuler(
@@ -592,6 +590,14 @@ async function main() {
           headQuaternion.y,
           headQuaternion.z,
           headQuaternion.w
+        ]
+      },
+      [VRMHumanBoneName.Spine]: {
+        rotation: [
+          spineQuaternion.x,
+          spineQuaternion.y,
+          spineQuaternion.z,
+          spineQuaternion.w
         ]
       },
       [VRMHumanBoneName.LeftUpperArm]: {
