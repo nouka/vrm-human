@@ -32,10 +32,12 @@ export default class VRMMotionDetector {
     this.leftHandRig = handRigs.find((rig) => rig?.LeftWrist !== undefined)
   }
 
-  private getScore(result: FaceLandmarkerResult, name: string) {
-    return result.faceBlendshapes[0]?.categories.filter(
-      (category) => category.categoryName === name
-    )[0].score
+  private getScore(result: FaceLandmarkerResult, name: string): number {
+    return (
+      result.faceBlendshapes[0]?.categories.filter(
+        (category) => category.categoryName === name
+      )[0].score ?? 0
+    )
   }
 
   private getFaceRig(result: FaceLandmarkerResult, video: HTMLVideoElement) {

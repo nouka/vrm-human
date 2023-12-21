@@ -33,6 +33,9 @@ export default class MediaPipe {
         delegate: 'GPU'
       },
       outputFaceBlendshapes: true,
+      minFaceDetectionConfidence: 0.5,
+      minFacePresenceConfidence: 0.5,
+      minTrackingConfidence: 1.0,
       runningMode: 'VIDEO',
       numFaces: 1
     })
@@ -44,6 +47,9 @@ export default class MediaPipe {
         modelAssetPath: this.poseLandmakerModelAssetPath,
         delegate: 'GPU'
       },
+      minPoseDetectionConfidence: 0.5,
+      minPosePresenceConfidence: 0.5,
+      minTrackingConfidence: 1.0,
       runningMode: 'VIDEO',
       numPoses: 1
     })
@@ -55,6 +61,9 @@ export default class MediaPipe {
         modelAssetPath: this.handLandmakerModelAssetPath,
         delegate: 'GPU'
       },
+      minHandDetectionConfidence: 0.5,
+      minHandPresenceConfidence: 0.5,
+      minTrackingConfidence: 1.0,
       runningMode: 'VIDEO',
       numHands: 2
     })
