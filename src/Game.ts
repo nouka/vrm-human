@@ -21,7 +21,7 @@ export default class Game {
   private handLandmarker: HandLandmarker | undefined
 
   constructor() {
-    // シーン
+    // シーンの生成
     this.scene = new THREE.Scene()
 
     // カメラの生成
@@ -56,16 +56,21 @@ export default class Game {
     this.scene.add(gridHelper)
     gridHelper.visible = true
 
+    // クロックの生成
     this.clock = new THREE.Clock()
   }
 
-  public static async build() {
-    const Self = new Game()
-
+  public static async create(vrmPath: string) {
+    // VRMのロード
     const loader = new VRMLoader()
-    Self.vrm = await loader.load('./models/test.vrm')
-    Self.scene.add(Self.vrm.scene)
+    const vrm = await loader.load(vrmPath)
 
+    // Gameオブジェクトを作成しVRMをセット
+    const Self = new Game()
+    Self.scene.add(vrm.scene)
+    Self.vrm = vrm
+
+    // MediaPipeのモデルをロードしてセット
     const mediapipe = await MediaPipe.build()
     Self.faceLandmarker = await mediapipe.getFaceLandmarker()
     Self.poseLandmarker = await mediapipe.getPoseLandmarker()
@@ -74,6 +79,12 @@ export default class Game {
     return Self
   }
 
+  /**
+   * Video入力から姿勢を検出しVRMにセットする
+   *
+   * @param video Video入力
+   * @param pref タイムスタンプ
+   */
   public async update(video: HTMLVideoElement, pref: number) {
     if (
       !this.faceLandmarker ||
@@ -107,10 +118,18 @@ export default class Game {
     this.vrm.humanoid.update()
   }
 
+  /**
+   * VRMモデルのレンダー
+   */
   public render() {
     this.renderer.render(this.scene, this.camera)
   }
 
+  /**
+   * Canvas Elementを取得
+   *
+   * @returns HTMLCanvasElement
+   */
   public getDomElement() {
     return this.renderer.domElement
   }
