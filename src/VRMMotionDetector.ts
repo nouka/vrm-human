@@ -11,12 +11,15 @@ import {
 import { Face, Hand, Pose, Side, TFace, THand, TPose } from 'kalidokit'
 import * as THREE from 'three'
 
+let memo: number[] = []
+
 export default class VRMMotionDetector {
   private faceLandmarkerResult: FaceLandmarkerResult
   private faceRig: TFace | undefined
   private poseRig: TPose | undefined
   private rightHandRig: THand<'Right'> | undefined
   private leftHandRig: THand<'Left'> | undefined
+  private threshold = 0.05
 
   constructor(
     video: HTMLVideoElement,
@@ -149,13 +152,18 @@ export default class VRMMotionDetector {
     )
 
     // 背骨
+    let x = this.poseRig.Spine.x
+    let y = this.poseRig.Spine.y
+    let z = this.poseRig.Spine.z
+    if (memo.length > 0) {
+      if (Math.abs(memo[0] - x) < this.threshold) x = memo[0]
+      if (Math.abs(memo[1] - y) < this.threshold) y = memo[1]
+      if (Math.abs(memo[2] - z) < this.threshold) z = memo[2]
+    }
     const spineQuaternion = new THREE.Quaternion().setFromEuler(
-      new THREE.Euler(
-        this.poseRig.Spine.x,
-        this.poseRig.Spine.y,
-        this.poseRig.Spine.z
-      )
+      new THREE.Euler(x, y, z)
     )
+    memo = [x, y, z]
 
     // 腕
     const leftUpperArmQuaternion = new THREE.Quaternion().setFromEuler(
